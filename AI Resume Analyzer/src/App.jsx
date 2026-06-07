@@ -39,13 +39,27 @@ function App() {
 
     // Clear old data
    // Clear previous data
+setFileUploaded(false);
+
+// Clear previous analysis completely
 setResumeText("");
 setUploadedText("");
 setResult("");
+
 setAtsScore("0%");
 setSkills([]);
 setProjectCount(0);
+
 setFileUploaded(false);
+
+// force clear old data immediately
+setTimeout(() => {
+setAtsScore("0%");
+setSkills([]);
+},0);
+
+// Hide old analysis immediately
+setLoading(false);
 
     let text = "";
 
@@ -115,6 +129,11 @@ setFileUploaded(false);
   try {
 
     if (!uploadedText) {
+      // Clear previous analysis before new analysis starts
+setResult("");
+setAtsScore("0%");
+setSkills([]);
+setProjectCount(0);
 
       setResult(
         "Please upload resume first."
@@ -127,8 +146,11 @@ setFileUploaded(false);
 
     // Show preview immediately
     
-    const response =
-      await askAI(
+    let aiText = "";
+
+try {
+
+  const response = await askAI(
 `
 Analyze this resume and provide:
 
@@ -141,43 +163,73 @@ Analyze this resume and provide:
 Resume:
 ${uploadedText}
 `
-      );
+  );
 
-    const aiText =
-response?.message?.content?.[0]?.text
-||
-`
-ATS Score: 75%
+  aiText =
+  response?.message?.content?.[0]?.text;
 
-Strengths:
-- Good resume structure
-- Skills are relevant
-- Projects included
+}
 
-Weaknesses:
-- Add more measurable achievements
-- Improve formatting
-- Add more keywords
+catch(error){
 
-Skills Found:
-React, JavaScript, HTML, CSS
+  console.log("AI Error:", error);
 
-Improvement Suggestions:
-- Add metrics in projects
-- Add GitHub profile
-- Improve ATS keywords
+}
+
+
+if(!aiText){
+
+// Better skill detection
+const detectedSkills =
+uploadedText.match(
+/HTML|CSS|JavaScript|React|Node|Tailwind|Git|GitHub|MongoDB|Express|Redux|API|Python|Java|C\+\+|SQL|AWS|Bootstrap|Next.js/gi
+);
+
+const uniqueSkills =
+detectedSkills
+? [...new Set(detectedSkills)]
+: ["General Skills"];
+
+// Stable score from resume length
+const score =
+Math.min(
+90,
+Math.max(
+60,
+Math.floor(uploadedText.length / 100)
+)
+);
+
+aiText = `
+ATS Score: ${score}%
+
+STRENGTHS:
+• Resume uploaded successfully
+• Resume content extracted
+
+WEAKNESSES:
+• AI analysis unavailable
+
+SKILLS FOUND:
+${uniqueSkills.map(skill=>"• "+skill).join("\n")}
+
+IMPROVEMENT SUGGESTIONS:
+• Add measurable achievements
+• Improve ATS keywords
 `;
+}
+
     setResumeText(uploadedText);
 
     setResult(aiText);
     const scoreMatch =
-      aiText.match(/\d+\/100|\d+%/);
+aiText.match(/\d+%|\d+\/100/);
 
-    if(scoreMatch){
-
-      setAtsScore(scoreMatch[0]);
-
-    }
+setAtsScore(
+scoreMatch
+? scoreMatch[0]
+: "0%"
+);
 
     const skillMatches =
       aiText.match(
@@ -226,9 +278,7 @@ function downloadPDF() {
   // Clean text properly
   let cleanText = result
     .replace(/[#*`]/g, "")
-    .replace(/[^\x20-\x7E\n]/g, "")
     .replace(/\|/g, " ")
-    .replace(/\s+/g, " ")
     .replace(/Strengths/g, "\n\nSTRENGTHS\n")
     .replace(/Weaknesses/g, "\n\nWEAKNESSES\n")
     .replace(/Skills Found/g, "\n\nSKILLS FOUND\n")
@@ -574,13 +624,12 @@ Resume Preview
 <div className="max-h-96 overflow-y-auto whitespace-pre-wrap text-zinc-300">
 
 {
-resumeText
+result
 ?
 resumeText.substring(0,2000)
 :
-"No resume uploaded"
+"Click Analyze Resume first"
 }
-
 </div>
 
 </div>
@@ -595,13 +644,10 @@ Analysis Result
 <div className="max-h-96 overflow-y-auto whitespace-pre-wrap text-zinc-300">
 
 {
-result
-?
-result
-:
-"Click Analyze Resume to generate AI feedback"
+resumeText && result
+? result
+: "Click Analyze Resume to generate Analysis"
 }
-
 </div>
 
 {
