@@ -11,6 +11,7 @@ import { askAI } from "./services/puter";
 import jsPDF from "jspdf";
 
 import { readDocx, readPdf } from "./services/parser";
+import { analyzeResume } from "./services/api";
 
 function App() {
   const [result, setResult] = useState("");
@@ -23,6 +24,8 @@ function App() {
   const [fileUploaded, setFileUploaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [fileName, setFileName] = useState("");
+  const [strengths, setStrengths] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
 
   // Reusable file processing
   async function processFile(file) {
@@ -70,8 +73,7 @@ function App() {
       setFileName(file.name);
       setFileUploaded(true);
     } catch (error) {
-      console.log(error);
-
+      console.log("AI Error Full:", error);
       setResult("Error reading file ❌");
     }
   }
@@ -104,7 +106,17 @@ function App() {
       }
 
       setLoading(true);
+      const backendResponse = await analyzeResume(uploadedText);
 
+      console.log(JSON.stringify(backendResponse, null, 2));
+      if (backendResponse?.success) {
+        setAtsScore(`${backendResponse.atsScore}%`);
+
+        setSkills(backendResponse.skills || []);
+        setStrengths(backendResponse.strengths || []);
+
+        setSuggestions(backendResponse.suggestions || []);
+      }
       // Show preview immediately
 
       let aiText = "";
@@ -139,12 +151,10 @@ ${uploadedText}
         const uniqueSkills = detectedSkills
           ? [...new Set(detectedSkills)]
           : ["General Skills"];
+        setSkills(backendResponse?.skills || uniqueSkills);
 
         // Stable score from resume length
-        const score = Math.min(
-          90,
-          Math.max(60, Math.floor(uploadedText.length / 100)),
-        );
+        const score = backendResponse?.atsScore || 0;
 
         aiText = `
 ATS Score: ${score}%
@@ -168,18 +178,18 @@ IMPROVEMENT SUGGESTIONS:
       setResumeText(uploadedText);
 
       setResult(aiText);
-      const scoreMatch = aiText.match(/\d+%|\d+\/100/);
+      //const scoreMatch = aiText.match(/\d+%|\d+\/100/);
 
-      setAtsScore(scoreMatch ? scoreMatch[0] : "0%");
+      //setAtsScore(scoreMatch ? scoreMatch[0] : "0%");
 
-      const skillMatches = aiText.match(
+      /*const skillMatches = aiText.match(
         /HTML|CSS|JavaScript|React|Node|Tailwind|Git|GitHub|MongoDB|Express|Redux|API/gi,
       );
 
       if (skillMatches) {
         setSkills([...new Set(skillMatches)]);
       }
-
+*/
       const projectMatches = uploadedText.match(/project/gi);
 
       setProjectCount(projectMatches ? projectMatches.length : 0);
@@ -352,7 +362,6 @@ IMPROVEMENT SUGGESTIONS:
                       <div className="bg-green-500 px-3 py-1 rounded-full text-sm">
                         Ready
                       </div>
-                      
                     </div>
                   </div>
                 )}
@@ -363,19 +372,25 @@ IMPROVEMENT SUGGESTIONS:
               onClick={handleAnalyze}
               disabled={loading || !uploadedText}
               className={`
-      w-full px-6 py-3 rounded-xl mt-6 transition
+      w-full px-6 py-4 rounded-2xl mt-6 font-semibold text-lg transition
       ${
         loading || !uploadedText
           ? "bg-zinc-700 cursor-not-allowed"
-          : "bg-purple-600 hover:bg-purple-700"
+          : "bg-gradient-to-r from-purple-600 to-pink-500 hover:scale-105 hover:shadow-lg transition-all duration-300"
       }
     `}
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-3">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
 
-                  <span>Analyzing Resume...</span>
+                  <div className="flex flex-col">
+                    <span>Analyzing Resume...</span>
+
+                    <span className="text-xs text-zinc-300">
+                      Extracting skills • Checking ATS • Generating feedback
+                    </span>
+                  </div>
                 </div>
               ) : (
                 "Analyze Resume"
@@ -387,7 +402,9 @@ IMPROVEMENT SUGGESTIONS:
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
             <div className="bg-zinc-900 rounded-2xl p-6">
-              <h3 className="mb-5">ATS Score</h3>
+              <h3 className="mb-5 text-2xl font-bold text-purple-400">
+                🎯 ATS Score
+              </h3>
 
               <div className="w-32 h-32 mx-auto">
                 <CircularProgressbar
@@ -438,7 +455,7 @@ IMPROVEMENT SUGGESTIONS:
                   skills.map((skill, index) => (
                     <span
                       key={index}
-                      className="bg-purple-600 px-3 py-2 rounded-xl"
+                      className="bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-500 px-5 py-3 rounded-full text-white font-semibold shadow-lg border border-white/20 hover:-translate-y-1 hover:shadow-2xl transition-all duration-300"
                     >
                       {skill}
                     </span>
