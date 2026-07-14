@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 
 import { useDropzone } from "react-dropzone";
@@ -7,25 +7,80 @@ import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 
 import "react-circular-progressbar/dist/styles.css";
 
-import { askAI } from "./services/puter";
+//import { askAI } from "../services/puter";
 import jsPDF from "jspdf";
 
 import { readDocx, readPdf } from "./services/parser";
 import { analyzeResume } from "./services/api";
+import Login from "./components/Login";
+import Register from "./components/Register";
+import History from "./components/History";
+import LandingPage from "./components/LandingPage";
 
 function App() {
+  const [showLanding, setShowLanding] = useState(true);
+  useEffect(() => {
+    const previousOnError = window.onerror;
+
+    window.onerror = function (msg) {
+      console.log("GLOBAL ERROR:", msg);
+      return false;
+    };
+
+    return () => {
+      window.onerror = previousOnError;
+    };
+  }, []);
+
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("token"));
+  const [showRegister, setShowRegister] = useState(false);
   const [result, setResult] = useState("");
   const [resumeText, setResumeText] = useState("");
   const [loading, setLoading] = useState(false);
   const [atsScore, setAtsScore] = useState("0%");
   const [skills, setSkills] = useState([]);
+  const jobs = [
+    {
+      title: "Frontend Developer",
+      company: "Google",
+      location: "Bangalore",
+      skills: ["HTML", "CSS", "JavaScript", "React"],
+    },
+    {
+      title: "React Developer",
+      company: "Microsoft",
+      location: "Hyderabad",
+      skills: ["React", "JavaScript", "Redux"],
+    },
+    {
+      title: "AI Intern",
+      company: "OpenAI",
+      location: "Remote",
+      skills: ["Python", "AI", "Machine Learning"],
+    },
+    {
+      title: "DevOps Engineer",
+      company: "Amazon",
+      location: "Pune",
+      skills: ["AWS", "Docker", "Kubernetes"],
+    },
+  ];
+
+  function calculateMatch(jobSkills) {
+    if (skills.length === 0) return 0;
+
+    const matched = jobSkills.filter((skill) =>
+      skills.some((s) => s.toLowerCase() === skill.toLowerCase()),
+    );
+
+    return Math.round((matched.length / jobSkills.length) * 100);
+  }
   const [projectCount, setProjectCount] = useState(0);
   const [uploadedText, setUploadedText] = useState("");
   const [fileUploaded, setFileUploaded] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [fileName, setFileName] = useState("");
-  const [strengths, setStrengths] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
+  const [darkMode, setDarkMode] = useState(true);
 
   // Reusable file processing
   async function processFile(file) {
@@ -92,6 +147,7 @@ function App() {
 
   // AI Analysis
   async function handleAnalyze() {
+    console.log("ANALYZE BUTTON CLICKED");
     try {
       if (!uploadedText) {
         // Clear previous analysis before new analysis starts
@@ -111,36 +167,29 @@ function App() {
       console.log(JSON.stringify(backendResponse, null, 2));
       if (backendResponse?.success) {
         setAtsScore(`${backendResponse.atsScore}%`);
-
         setSkills(backendResponse.skills || []);
-        setStrengths(backendResponse.strengths || []);
-
-        setSuggestions(backendResponse.suggestions || []);
       }
       // Show preview immediately
 
       let aiText = "";
-
-      try {
-        const response = await askAI(
-          `
-Analyze this resume and provide:
-
-1. ATS Score
-2. Strengths
-3. Weaknesses
-4. Skills Found
-5. Improvement Suggestions
-
-Resume:
-${uploadedText}
-`,
-        );
-
-        aiText = response?.message?.content?.[0]?.text;
-      } catch (error) {
-        console.log("AI Error:", error);
-      }
+      // Puter temporarily disabled
+      // try {
+      //   const response = await askAI(`
+      // Analyze this resume and provide:
+      //
+      // 1. ATS Score
+      // 2. Strengths
+      // 3. Weaknesses
+      // 4. Skills Found
+      // 5. Improvement Suggestions
+      //
+      // Resume:
+      // ${uploadedText}
+      // `);
+      //   aiText = response?.message?.content?.[0]?.text;
+      // } catch (error) {
+      //   console.log("AI Error:", error);
+      // }
 
       if (!aiText) {
         // Better skill detection
@@ -176,20 +225,33 @@ IMPROVEMENT SUGGESTIONS:
       }
 
       setResumeText(uploadedText);
+      aiText = `ATS Score: ${backendResponse.atsScore}%
 
+Skills Found:
+${backendResponse.skills.join(", ")}
+
+Strengths:
+${backendResponse.strengths.join("\n")}
+
+Weaknesses:
+${backendResponse.weaknesses?.join("\n") || "No weaknesses found"}
+
+Suggestions:
+${backendResponse.suggestions.join("\n")}
+`;
       setResult(aiText);
       //const scoreMatch = aiText.match(/\d+%|\d+\/100/);
 
       //setAtsScore(scoreMatch ? scoreMatch[0] : "0%");
 
-      /*const skillMatches = aiText.match(
+      const skillMatches = aiText.match(
         /HTML|CSS|JavaScript|React|Node|Tailwind|Git|GitHub|MongoDB|Express|Redux|API/gi,
       );
 
       if (skillMatches) {
         setSkills([...new Set(skillMatches)]);
       }
-*/
+
       const projectMatches = uploadedText.match(/project/gi);
 
       setProjectCount(projectMatches ? projectMatches.length : 0);
@@ -239,12 +301,34 @@ IMPROVEMENT SUGGESTIONS:
 
     doc.save("resume-analysis.pdf");
   }
+  if (showLanding) {
+    return <LandingPage onGetStarted={() => setShowLanding(false)} />;
+  }
+  if (!isLoggedIn) {
+    return showRegister ? (
+      <Register key="register" onSwitchToLogin={() => setShowRegister(false)} />
+    ) : (
+      <Login
+        key="login"
+        onLogin={() => setIsLoggedIn(true)}
+        onSwitchToRegister={() => setShowRegister(true)}
+      />
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
+    <div
+      className={`min-h-screen flex ${
+        darkMode ? "bg-black text-white" : "bg-white text-black"
+      }`}
+    >
       {/* Sidebar */}
 
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        darkMode={darkMode}
+      />
 
       {/* Main */}
       {activeTab === "dashboard" && (
@@ -296,7 +380,13 @@ IMPROVEMENT SUGGESTIONS:
 
           {/* Upload Section */}
 
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-8 mt-10 shadow-xl">
+          <div
+            className={`rounded-3xl p-8 mt-10 shadow-xl border ${
+              darkMode
+                ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-zinc-800"
+                : "bg-white border-gray-300"
+            }`}
+          >
             <h2 className="text-3xl font-bold mb-2">Upload Resume</h2>
 
             <p className="text-zinc-400 mb-6">
@@ -399,9 +489,14 @@ IMPROVEMENT SUGGESTIONS:
           </div>
 
           {/* Dashboard */}
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
-            <div className="bg-zinc-900 rounded-2xl p-6">
+            <div
+              className={`rounded-2xl p-6 ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
               <h3 className="mb-5 text-2xl font-bold text-purple-400">
                 🎯 ATS Score
               </h3>
@@ -447,9 +542,14 @@ IMPROVEMENT SUGGESTIONS:
               </p>
             )}
 
-            <div className="bg-zinc-900 rounded-2xl p-6">
-              <h3 className="mb-5">Skills Found</h3>
-
+            <div
+              className={`rounded-2xl p-6 ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg border"
+              }`}
+            >
+              <h3> Skills </h3>
               <div className="flex flex-wrap gap-2">
                 {skills.length > 0 ? (
                   skills.map((skill, index) => (
@@ -466,9 +566,14 @@ IMPROVEMENT SUGGESTIONS:
               </div>
             </div>
 
-            <div className="bg-zinc-900 rounded-2xl p-6">
+            <div
+              className={`rounded-2xl p-6 ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
               <h3>Projects</h3>
-
               <p className="text-4xl mt-5 font-bold">{projectCount}</p>
             </div>
           </div>
@@ -476,17 +581,33 @@ IMPROVEMENT SUGGESTIONS:
           {/* Resume Preview + Analysis */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-10">
-            <div className="bg-zinc-900 p-8 rounded-2xl">
+            <div
+              className={`p-8 rounded-2xl ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
               <h2 className="text-2xl mb-5">Resume Preview</h2>
 
-              <div className="max-h-96 overflow-y-auto whitespace-pre-wrap text-zinc-300">
+              <div
+                className={`max-h-96 overflow-y-auto whitespace-pre-wrap ${
+                  darkMode ? "text-zinc-300" : "text-black"
+                }`}
+              >
                 {result
                   ? resumeText.substring(0, 2000)
                   : "Click Analyze Resume first"}
               </div>
             </div>
 
-            <div className="bg-zinc-900 p-8 rounded-2xl">
+            <div
+              className={`p-8 rounded-2xl ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
               <h2 className="text-2xl mb-5">Analysis Result</h2>
 
               <div className="max-h-96 overflow-y-auto whitespace-pre-wrap text-zinc-300">
@@ -503,6 +624,166 @@ IMPROVEMENT SUGGESTIONS:
                   Download Report PDF
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {activeTab === "analysis" && (
+        <div className="flex-1 p-10">
+          <h1 className="text-5xl font-bold">Resume Analysis Report</h1>
+
+          <p className="text-zinc-400 mt-2">
+            Detailed AI feedback and resume evaluation
+          </p>
+
+          <div
+            className={`p-8 rounded-2xl mt-8 ${
+              darkMode
+                ? "bg-zinc-900 text-white"
+                : "bg-white text-black shadow-lg"
+            }`}
+          >
+            <h2 className="text-2xl font-bold mb-5">Full Analysis Report</h2>
+
+            <div className="whitespace-pre-wrap text-zinc-300 max-h-[500px] overflow-y-auto">
+              {result ||
+                "Please upload and analyze a resume from Dashboard first"}
+            </div>
+
+            {result && (
+              <button
+                onClick={downloadPDF}
+                className="bg-green-600 px-5 py-3 rounded-xl mt-5 hover:bg-green-700"
+              >
+                Download PDF Report
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {activeTab === "jobmatch" && (
+        <div className="flex-1 p-10">
+          <h1 className="text-5xl font-bold">Job Matches</h1>
+
+          {jobs.map((job, index) => (
+            <div
+              key={index}
+              className={`p-6 rounded-3xl border hover:scale-105 transition-all duration-300 mt-6 ${
+                darkMode
+                  ? "bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-800 text-white"
+                  : "bg-white text-black shadow-lg border-gray-200"
+              }`}
+            >
+              <p className="text-zinc-400 mt-2">
+                {job.company} • {job.location}
+              </p>
+
+              <h2 className="text-2xl font-bold text-purple-400 mt-3">
+                {job.title}
+              </h2>
+
+              <div className="mt-4 inline-block bg-purple-600 px-4 py-2 rounded-full font-semibold">
+                {calculateMatch(job.skills)}% Match
+              </div>
+
+              <div className="w-full bg-zinc-700 rounded-full h-3 mt-4">
+                <div
+                  className="bg-purple-500 h-3 rounded-full"
+                  style={{
+                    width: `${calculateMatch(job.skills)}%`,
+                  }}
+                ></div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-4">
+                {job.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="bg-zinc-800 px-3 py-1 rounded-full text-sm"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+
+              <button className="mt-5 w-full bg-gradient-to-r from-purple-600 to-pink-500 py-3 rounded-xl font-semibold hover:scale-105 transition-all">
+                Apply Now
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {activeTab === "history" && <History />}
+
+      {activeTab === "settings" && (
+        <div className="flex-1 p-10">
+          <h1 className="text-5xl font-bold">Settings</h1>
+
+          <p className="text-zinc-400 mt-2">
+            Manage your profile and preferences
+          </p>
+
+          <div className="grid md:grid-cols-2 gap-5 mt-10">
+            <div
+              className={`p-6 rounded-2xl ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
+              <h2 className="text-2xl font-bold">🌙 Theme</h2>
+
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => setDarkMode(true)}
+                  className={`px-4 py-2 rounded-lg ${
+                    darkMode ? "bg-purple-600" : "bg-zinc-700"
+                  }`}
+                >
+                  Dark Mode
+                </button>
+
+                <button
+                  onClick={() => setDarkMode(false)}
+                  className={`px-4 py-2 rounded-lg ${
+                    !darkMode ? "bg-yellow-500 text-black" : "bg-zinc-700"
+                  }`}
+                >
+                  Light Mode
+                </button>
+              </div>
+
+              <p className="text-zinc-400 mt-3">
+                Current Theme: {darkMode ? "Dark" : "Light"}
+              </p>
+            </div>
+
+            <div
+              className={`p-6 rounded-2xl ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
+              <h2 className="text-2xl font-bold">☀️ Light Mode</h2>
+
+              <button className="bg-zinc-700 px-4 py-2 rounded-lg mt-4">
+                Disabled
+              </button>
+            </div>
+
+            <div
+              className={`p-6 rounded-2xl ${
+                darkMode
+                  ? "bg-zinc-900 text-white"
+                  : "bg-white text-black shadow-lg"
+              }`}
+            >
+              <h2 className="text-2xl font-bold">❓ Help & Support</h2>
+
+              <p className="text-zinc-400 mt-3">
+                Contact support or read documentation
+              </p>
             </div>
           </div>
         </div>
