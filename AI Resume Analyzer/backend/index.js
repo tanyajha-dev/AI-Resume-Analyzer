@@ -319,30 +319,44 @@ app.post("/analyze", async (req, res) => {
     relatedRoles: aiRelatedRoles,
   });
 });
+console.log("JOBS ROUTE REGISTERED");
 app.get("/jobs", async (req, res) => {
+  console.log("ADZUNA ROUTE RUNNING");
   try {
-    const keyword = req.query.keyword || "developer";
+    const keyword = req.query.keyword || "Software Developer";
 
     console.log("Searching Jobs:", keyword);
 
+    const response = await axios.get(
+      `https://api.adzuna.com/v1/api/jobs/in/search/1`,
+      {
+        params: {
+          app_id: process.env.ADZUNA_APP_ID,
+          app_key: process.env.ADZUNA_APP_KEY,
+          results_per_page: 10,
+          what: keyword,
+        },
+      },
+    );
+
+    const jobs = response.data.results.map((job) => ({
+      title: job.title,
+      company: job.company?.display_name || "Unknown Company",
+      location: job.location?.display_name || "Unknown Location",
+      url: job.redirect_url,
+    }));
+
     res.json({
       success: true,
-      jobs: [
-        {
-          title: keyword,
-          company: "TCS",
-          location: "Pune",
-        },
-        {
-          title: keyword,
-          company: "Infosys",
-          location: "Bangalore",
-        },
-      ],
+      jobs,
     });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ success: false });
+    console.log("Jobs API Error:", error.message);
+
+    res.status(500).json({
+      success: false,
+      jobs: [],
+    });
   }
 });
 app.get("/history", async (req, res) => {
