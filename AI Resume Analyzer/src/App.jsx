@@ -39,7 +39,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [atsScore, setAtsScore] = useState("0%");
   const [skills, setSkills] = useState([]);
-  const jobs = [
+  const [jobKeyword, setJobKeyword] = useState("");
+  const [jobs, setJobs] = useState([
     {
       title: "Frontend Developer",
       company: "Google",
@@ -52,22 +53,10 @@ function App() {
       location: "Hyderabad",
       skills: ["React", "JavaScript", "Redux"],
     },
-    {
-      title: "AI Intern",
-      company: "OpenAI",
-      location: "Remote",
-      skills: ["Python", "AI", "Machine Learning"],
-    },
-    {
-      title: "DevOps Engineer",
-      company: "Amazon",
-      location: "Pune",
-      skills: ["AWS", "Docker", "Kubernetes"],
-    },
-  ];
+  ]);
 
-  function calculateMatch(jobSkills) {
-    if (skills.length === 0) return 0;
+  function calculateMatch(jobSkills = []) {
+    if (skills.length === 0 || jobSkills.length === 0) return 0;
 
     const matched = jobSkills.filter((skill) =>
       skills.some((s) => s.toLowerCase() === skill.toLowerCase()),
@@ -144,7 +133,51 @@ function App() {
     onDrop,
     multiple: false,
   });
+  async function fetchJobs(keyword) {
+    try {
+      const response = await fetch(
+        "https://www.arbeitnow.com/api/job-board-api",
+      );
 
+      const data = await response.json();
+
+      const filteredJobs = data.data
+        .filter((job) =>
+          job.title.toLowerCase().includes(keyword.toLowerCase()),
+        )
+        .slice(0, 10);
+
+      const formattedJobs = filteredJobs.map((job) => ({
+        title: job.title,
+        company: job.company_name,
+        location: job.location,
+        skills: [],
+        url: job.url,
+      }));
+
+      setJobs(formattedJobs);
+    } catch (error) {
+      console.log("Job API Error:", error);
+    }
+  }
+  async function fetchJobs(keyword) {
+    try {
+      console.log("Searching Jobs For:", keyword);
+
+      const response = await fetch(
+        `http://localhost:5000/jobs?keyword=${encodeURIComponent(keyword)}`,
+      );
+
+      const data = await response.json();
+      console.log("Jobs API Response:", data);
+
+      if (data.success) {
+        setJobs(data.jobs);
+      }
+    } catch (error) {
+      console.log("Job Fetch Error:", error);
+    }
+  }
   // AI Analysis
   async function handleAnalyze() {
     console.log("ANALYZE BUTTON CLICKED");
@@ -167,7 +200,12 @@ function App() {
       console.log(JSON.stringify(backendResponse, null, 2));
       if (backendResponse?.success) {
         setAtsScore(`${backendResponse.atsScore}%`);
-        setSkills(backendResponse.skills || []);
+
+        const extractedSkills = backendResponse.skills || [];
+
+        setSkills(extractedSkills);
+        setJobKeyword(backendResponse.jobKeyword || "Software Developer");
+        fetchJobs(backendResponse.jobKeyword || "Software Developer");
       }
       // Show preview immediately
 
@@ -664,6 +702,9 @@ ${backendResponse.suggestions.join("\n")}
       {activeTab === "jobmatch" && (
         <div className="flex-1 p-10">
           <h1 className="text-5xl font-bold">Job Matches</h1>
+          <p className="text-zinc-400 mt-2">
+            Recommended jobs for: {jobKeyword || "Analyze a resume first"}
+          </p>
 
           {jobs.map((job, index) => (
             <div
@@ -683,20 +724,20 @@ ${backendResponse.suggestions.join("\n")}
               </h2>
 
               <div className="mt-4 inline-block bg-purple-600 px-4 py-2 rounded-full font-semibold">
-                {calculateMatch(job.skills)}% Match
+                {calculateMatch(job.skills || [])}% Match
               </div>
 
               <div className="w-full bg-zinc-700 rounded-full h-3 mt-4">
                 <div
                   className="bg-purple-500 h-3 rounded-full"
                   style={{
-                    width: `${calculateMatch(job.skills)}%`,
+                    width: `${calculateMatch(job.skills || [])}%`,
                   }}
                 ></div>
               </div>
 
               <div className="flex flex-wrap gap-2 mt-4">
-                {job.skills.map((skill) => (
+                {(job.skills || []).map((skill) => (
                   <span
                     key={skill}
                     className="bg-zinc-800 px-3 py-1 rounded-full text-sm"
@@ -706,9 +747,14 @@ ${backendResponse.suggestions.join("\n")}
                 ))}
               </div>
 
-              <button className="mt-5 w-full bg-gradient-to-r from-purple-600 to-pink-500 py-3 rounded-xl font-semibold hover:scale-105 transition-all">
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center mt-5 w-full bg-gradient-to-r from-purple-600 to-pink-500 py-3 rounded-xl font-semibold hover:scale-105 transition-all"
+              >
                 Apply Now
-              </button>
+              </a>
             </div>
           ))}
         </div>

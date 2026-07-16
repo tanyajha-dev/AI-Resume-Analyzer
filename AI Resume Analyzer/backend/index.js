@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import Analysis from "./models/Analysis.js";
+import axios from "axios";
 
 dotenv.config();
 connectDB();
@@ -41,17 +42,87 @@ Return ONLY valid JSON:
   "skills": [],
   "strengths": [],
   "weaknesses": [],
-  "suggestions": []
+  "suggestions": [],
+  "jobKeyword": "",
+  "relatedRoles": []
+}
+  Example Output:
+
+{
+  "atsScore": 85,
+  "skills": ["React", "JavaScript", "HTML", "CSS"],
+  "strengths": ["Strong frontend skills"],
+  "weaknesses": [],
+  "suggestions": [],
+  "jobKeyword": "Frontend Developer",
+  "relatedRoles": [
+    "React Developer",
+    "UI Developer",
+    "Web Developer",
+    "Frontend Engineer"
+  ]
+    Important:
+Use the actual ATS score calculated from the resume.
+Do not copy the ATS score from the example output.
 }
   Instructions:
 
-- ATS score should be between 0 and 100
-- Extract ALL skills from the resume
-- Include technical skills and domain skills
-- Give realistic strengths
-- Give realistic weaknesses
-- Give actionable suggestions
+- Generate the most suitable job title based on the resume skills and experience
+- jobKeyword is mandatory
+- Return exactly one job title
+- jobKeyword should be a real searchable role such as:
+  Frontend Developer
+  Backend Developer
+  Full Stack Developer
+  AI Engineer
+  Customer Support Executive
+  Digital Marketing Executive
+  Accountant
+  Data Analyst
+  Real Estate Sales Executive
+- Do not omit any field from the JSON response
+- relatedRoles is mandatory
+- Return 3 to 5 related job roles based on the resume
+- relatedRoles must contain at least 3 job roles
+- relatedRoles cannot be empty
+- If the resume contains React, JavaScript, HTML, CSS, Tailwind:
+  - jobKeyword = "Frontend Developer"
+  - relatedRoles should include:
+    - React Developer
+    - UI Developer
+    - Web Developer
+    - Frontend Engineer
 
+-If the resume contains Node.js, Express, MongoDB:
+-jobKeyword = "Backend Developer"
+
+-relatedRoles should include:
+ -Node.js Developer
+ -API Developer
+ -Backend Engineer
+ -Express.js Developer
+
+-If the resume contains React, Node.js, MongoDB:
+-jobKeyword = "Full Stack Developer"
+
+-relatedRoles should include:
+ -MERN Stack Developer
+ -JavaScript Developer
+ -Full Stack Engineer
+ -Web Application Developer
+
+-If the resume contains Python, AI, Machine Learning:
+-jobKeyword = "AI Engineer"
+
+-relatedRoles should include:
+ -Machine Learning Engineer
+ -AI Developer
+ -Python Developer
+ -Data Scientist
+
+relatedRoles cannot be empty.
+- Prefer specific job roles over generic roles.
+- Do not use "Software Developer" unless no specific role can be determined.
 Resume:
 ${resumeText}
 `;
@@ -76,6 +147,8 @@ ${resumeText}
     const response = await result.response;
 
     console.log(response.text());
+    console.log("RAW GEMINI RESPONSE:");
+    console.log(response.text());
 
     return response.text();
   } catch (error) {
@@ -87,6 +160,7 @@ ${resumeText}
       strengths: [],
       weaknesses: [],
       suggestions: [],
+      jobKeyword: "Software Developer",
     });
   }
 }
@@ -171,6 +245,8 @@ app.post("/analyze", async (req, res) => {
   let aiSuggestions = [];
   let aiSkills = [];
   let aiAtsScore = 0;
+  let aiJobKeyword = "Software Developer";
+  let aiRelatedRoles = [];
 
   try {
     const aiResponse = await getAIAnalysis(resumeText);
@@ -186,6 +262,8 @@ app.post("/analyze", async (req, res) => {
       aiSuggestions = parsed.suggestions || [];
       aiSkills = parsed.skills || [];
       aiAtsScore = parsed.atsScore || 0;
+      aiJobKeyword = parsed.jobKeyword || "Software Developer";
+      aiRelatedRoles = parsed.relatedRoles || [];
     }
   } catch (err) {
     console.log("AI Parse Error:", err);
@@ -236,7 +314,36 @@ app.post("/analyze", async (req, res) => {
     weaknesses: aiWeaknesses,
 
     suggestions: [...suggestions, ...aiSuggestions],
+
+    jobKeyword: aiJobKeyword,
+    relatedRoles: aiRelatedRoles,
   });
+});
+app.get("/jobs", async (req, res) => {
+  try {
+    const keyword = req.query.keyword || "developer";
+
+    console.log("Searching Jobs:", keyword);
+
+    res.json({
+      success: true,
+      jobs: [
+        {
+          title: keyword,
+          company: "TCS",
+          location: "Pune",
+        },
+        {
+          title: keyword,
+          company: "Infosys",
+          location: "Bangalore",
+        },
+      ],
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false });
+  }
 });
 app.get("/history", async (req, res) => {
   try {
